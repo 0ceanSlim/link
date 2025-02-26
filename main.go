@@ -28,7 +28,6 @@ func main() {
 	mux.HandleFunc("/settings", routes.Settings)
 
 	// Function Handlers
-	mux.HandleFunc("/send-signed-kind1", handlers.SendSignedKind1)
 	mux.HandleFunc("/save_donation_addresses", handlers.SaveDonationAddresses)
 
 	// Serve Web Files

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"time"
 
 	"link/src/utils"
 
@@ -39,19 +38,30 @@ func SaveDonationAddresses(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// **Send the signed event to Nostr relays**
+	success := false
 	results := map[string]string{}
 	for _, relay := range relays.Both {
-		err := utils.SendToRelay(relay, signedEvent)
+		ack, err := utils.SendToRelay(relay, signedEvent)
 		if err != nil {
 			log.Printf("⚠️ Failed to send event to relay %s: %v", relay, err)
 			results[relay] = fmt.Sprintf("Failed: %v", err)
-		} else {
+		} else if ack {
+			log.Printf("✅ Relay %s acknowledged event", relay)
 			results[relay] = "Success"
+			success = true
+		} else {
+			log.Printf("⚠️ Relay %s did not acknowledge the event", relay)
+			results[relay] = "No acknowledgment"
 		}
 	}
 
-	// **Wait briefly, then fetch the latest metadata from Nostr**
-	time.Sleep(500 * time.Millisecond) // Allow relays to process the event
+	// **Ensure at least one relay confirmed before proceeding**
+	if !success {
+		http.Error(w, "No relay acknowledged the event", http.StatusBadGateway)
+		return
+	}
+
+	// ✅ **Fetch latest metadata (only if event was confirmed)**
 	updatedMetadata, err := utils.FetchUserMetadata(publicKey, relays.ToStringSlice())
 	if err != nil || updatedMetadata == nil {
 		log.Println("⚠️ Failed to fetch updated user metadata")
@@ -61,7 +71,7 @@ func SaveDonationAddresses(w http.ResponseWriter, r *http.Request) {
 
 	// ✅ **Update session with latest `w` tags**
 	session.Values["donationTags"] = updatedMetadata.Tags
-	log.Printf("✅ Updated Session Donation Tags After Removal: %+v", updatedMetadata.Tags)
+	log.Printf("✅ Updated Session Donation Tags: %+v", updatedMetadata.Tags)
 
 	if err := session.Save(r, w); err != nil {
 		log.Printf("❌ Error saving session: %v", err)
