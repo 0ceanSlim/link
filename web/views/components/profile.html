@@ -10,33 +10,33 @@
 
 <p class="mb-4 text-sm text-center text-textMuted">{{.PublicKey}}</p>
 
-<div class="p-6 rounded-lg bg-bgPrimary w-full max-w-2xl">
+<div class="w-full max-w-2xl p-6 rounded-lg bg-bgPrimary">
   <p class="text-lg text-left">{{.About}}</p>
 </div>
 
 <!-- Donation Addresses -->
-<div class="p-6 mt-6 rounded-lg bg-bgPrimary w-full max-w-2xl">
+<div class="w-full max-w-2xl p-6 mt-6 rounded-lg bg-bgPrimary">
   <h3 class="mb-4 text-xl font-semibold text-center">
     Your Donation Addresses
   </h3>
   <ul id="donation-list" class="space-y-2 text-left">
-    {{if .DonationTags}} {{range $index, $tag := .DonationTags}}
+    {{if .DonationTags}} {{range .DonationTags}}
     <li
-      class="flex items-center justify-between p-3 rounded-lg bg-bgSecondary shadow"
+      class="flex items-center justify-between p-3 rounded-lg shadow bg-bgSecondary"
     >
       <div>
-        <strong class="text-lg">{{index $tag 1}}</strong>
-        ({{index $tag 2}}):
-        <span class="text-sm break-all">{{index $tag 3}}</span>
+        <strong class="text-lg">{{index . 1}}</strong>:
+        <span class="text-sm break-all">{{index . 2}}</span>
+        {{if (gt (len .) 3)}} ({{index . 3}}) {{end}}
       </div>
       <button
-        onclick="removeDonationAddress('{{index $tag 1}}', '{{index $tag 2}}', '{{index $tag 3}}')"
+        onclick="removeDonationAddress('{{index . 1}}', '{{index . 2}}', '{{if (gt (len .) 3)}}{{index . 3}}{{end}}')"
       >
         Remove
       </button>
     </li>
     {{end}} {{else}}
-    <p class="text-center text-sm text-textMuted">
+    <p class="text-sm text-center text-textMuted">
       No donation addresses set yet.
     </p>
     {{end}}
@@ -44,68 +44,56 @@
 </div>
 
 <!-- Add Donation Address Form -->
-<div class="p-6 mt-6 rounded-lg bg-bgPrimary w-full max-w-2xl">
+<div class="w-full max-w-2xl p-6 mt-6 rounded-lg bg-bgPrimary">
   <h3 class="mb-4 text-xl font-semibold text-center">
     Add New Donation Address
   </h3>
   <form id="donation-form">
     <div id="donation-fields" class="space-y-3 text-black">
       <div
-        class="donation-group flex flex-col gap-2 p-4 bg-bgSecondary rounded-lg shadow"
+        class="flex flex-col gap-2 p-4 rounded-lg shadow donation-group bg-bgSecondary"
       >
         <input
           type="text"
           name="ticker_0"
           placeholder="Asset Ticker (e.g., BTC)"
-          class="p-2 rounded border border-bgInverted focus:ring focus:ring-accent"
+          class="p-2 border rounded border-bgInverted focus:ring focus:ring-accent"
           required
         />
         <input
           type="text"
           name="network_0"
           placeholder="Network (e.g., Bitcoin)"
-          class="p-2 rounded border border-bgInverted focus:ring focus:ring-accent"
+          class="p-2 border rounded border-bgInverted focus:ring focus:ring-accent"
           required
         />
         <input
           type="text"
           name="address_0"
           placeholder="Receiving Address"
-          class="p-2 rounded border border-bgInverted focus:ring focus:ring-accent"
+          class="p-2 border rounded border-bgInverted focus:ring focus:ring-accent"
           required
         />
       </div>
     </div>
 
-    <div class="mt-4 flex flex-col sm:flex-row gap-2">
-      <button
-        type="button"
-        class="px-4 py-2 bg-accent text-white font-semibold rounded-lg shadow hover:bg-opacity-90"
-        onclick="addField()"
-      >
-        + Add More
-      </button>
-      <button
-        type="submit"
-        class="px-4 py-2 bg-primary text-white font-semibold rounded-lg shadow hover:bg-opacity-90"
-      >
-        Save
-      </button>
+    <div class="flex flex-col gap-2 mt-4 sm:flex-row">
+      <button type="button" onclick="addField()">+ Add More</button>
+      <button type="submit">Save</button>
     </div>
   </form>
 </div>
 
 <script>
-  async function removeDonationAddress(ticker, network, address) {
+  async function removeDonationAddress(asset, address, network = "") {
     if (!window.nostr) {
       alert("Nostr extension not available.");
       return;
     }
 
     try {
-      // **Step 1: Fetch latest profile data**
       const pubkey = await window.nostr.getPublicKey();
-      const relay = "wss://relay.damus.io";
+      const relay = "wss://wheat.happytavern.co";
       const profileEvent = await fetchLatestProfile(pubkey, relay);
 
       if (!profileEvent) {
@@ -113,33 +101,31 @@
         return;
       }
 
-      // **Step 2: Filter out the selected donation address**
-      let updatedTags = profileEvent?.tags || [];
-      updatedTags = updatedTags.filter(
-        (tag) =>
-          !(
-            tag[0] === "i" &&
-            tag[1] === ticker &&
-            tag[2] === network &&
-            tag[3] === address
-          )
-      );
+      // **Remove the selected `w` tag**
+      let updatedTags = profileEvent.tags.filter((tag) => {
+        return !(
+          tag[0] === "w" &&
+          tag[1] === asset &&
+          tag[2] === address &&
+          (tag.length === 3 || tag[3] === network)
+        );
+      });
 
-      console.log("Updated profile after removal:", updatedTags);
+      console.log("✅ Updated tags after removal:", updatedTags);
 
-      // **Step 3: Create and sign the updated kind 0 profile event**
+      // **Create and sign the updated kind 0 profile event**
       const updatedEvent = {
         kind: 0,
         created_at: Math.floor(Date.now() / 1000),
         tags: updatedTags,
-        content: profileEvent?.content || "",
+        content: profileEvent.content || "",
       };
 
-      console.log("Signing event...");
+      console.log("📝 Signing event...");
       const signedEvent = await window.nostr.signEvent(updatedEvent);
-      console.log("Signed Event:", signedEvent);
+      console.log("✅ Signed Event:", signedEvent);
 
-      // **Step 4: Send the updated event**
+      // **Send the updated event**
       const response = await fetch("/save_donation_addresses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -150,13 +136,18 @@
         throw new Error(`Failed to update profile: ${await response.text()}`);
       }
 
-      console.log("Profile updated successfully!");
+      console.log("✅ Profile updated successfully!");
+
+      // **Fetch updated profile before reloading**
+      await fetchUpdatedProfile();
+
       alert("Donation address removed successfully!");
 
-      // **Step 5: Refresh profile UI**
-      fetchUpdatedProfile();
+      setTimeout(() => {
+        window.location.reload();
+      }, 500); // ✅ Small delay before refreshing
     } catch (error) {
-      console.error("Error updating profile:", error);
+      console.error("❌ Error updating profile:", error);
       alert(`Error: ${error.message}`);
     }
   }
@@ -171,10 +162,10 @@
     div.className =
       "donation-group flex flex-col gap-2 p-4 bg-bgSecondary rounded-lg shadow";
     div.innerHTML = `
-      <input type="text" name="ticker_${count}" placeholder="Asset Ticker (e.g., BTC)" class="p-2 rounded border border-bgInverted focus:ring focus:ring-accent" required>
-      <input type="text" name="network_${count}" placeholder="Network (e.g., Bitcoin)" class="p-2 rounded border border-bgInverted focus:ring focus:ring-accent" required>
-      <input type="text" name="address_${count}" placeholder="Receiving Address" class="p-2 rounded border border-bgInverted focus:ring focus:ring-accent" required>
-      <button type="button" onclick="removeField(this)" class="mt-2 px-4 py-1 text-sm bg-red-500 text-white font-semibold rounded-lg shadow hover:bg-red-600">Remove</button>
+      <input type="text" name="ticker_${count}" placeholder="Asset Ticker (e.g., BTC)" class="p-2 border rounded border-bgInverted focus:ring focus:ring-accent" required>
+      <input type="text" name="network_${count}" placeholder="Network (e.g., Bitcoin)" class="p-2 border rounded border-bgInverted focus:ring focus:ring-accent" required>
+      <input type="text" name="address_${count}" placeholder="Receiving Address" class="p-2 border rounded border-bgInverted focus:ring focus:ring-accent" required>
+      <button type="button" onclick="removeField(this)" class="px-4 py-1 mt-2 text-sm font-semibold text-white bg-red-500 rounded-lg shadow hover:bg-red-600">Remove</button>
     `;
     container.appendChild(div);
     count++;
@@ -193,14 +184,17 @@
       const formData = new FormData(event.target);
       let newDonationTags = [];
 
-      // Collect new donation addresses
       for (let i = 0; formData.has(`ticker_${i}`); i++) {
         const ticker = formData.get(`ticker_${i}`).trim();
         const network = formData.get(`network_${i}`).trim();
         const address = formData.get(`address_${i}`).trim();
 
-        if (ticker && network && address) {
-          newDonationTags.push(["i", ticker, network, address]);
+        if (ticker && address) {
+          if (network) {
+            newDonationTags.push(["w", ticker, address, network]); // ✅ New format
+          } else {
+            newDonationTags.push(["w", ticker, address]); // ✅ Without network
+          }
         }
       }
 
@@ -215,38 +209,42 @@
       }
 
       try {
-        // Step 1: Fetch latest profile data
         const pubkey = await window.nostr.getPublicKey();
-        const relay = "wss://relay.damus.io";
+        const relay = "wss://wheat.happytavern.co";
         const profileEvent = await fetchLatestProfile(pubkey, relay);
 
-        // Step 2: Merge new donation addresses with existing ones
-        let updatedTags = profileEvent ? [...profileEvent.tags] : [];
+        if (!profileEvent || !profileEvent.tags) {
+          alert("Failed to fetch existing donation addresses.");
+          return;
+        }
 
-        // Remove matching old donation entries before adding new ones
-        updatedTags = updatedTags.filter(
-          (tag) =>
-            !(
-              tag[0] === "i" &&
-              newDonationTags.some(
-                (newTag) => newTag[1] === tag[1] && newTag[2] === tag[2]
-              )
+        let updatedTags = [...profileEvent.tags];
+
+        let existingDonationTags = updatedTags.filter((tag) => tag[0] === "w");
+
+        newDonationTags.forEach((newTag) => {
+          if (
+            !existingDonationTags.some(
+              (existingTag) =>
+                JSON.stringify(existingTag) === JSON.stringify(newTag)
             )
-        );
+          ) {
+            existingDonationTags.push(newTag);
+          }
+        });
 
-        // Append new donation addresses
-        updatedTags.push(...newDonationTags);
+        updatedTags = updatedTags.filter((tag) => tag[0] !== "w"); // ✅ Remove old "w" tags
+        updatedTags.push(...existingDonationTags); // ✅ Append all "w" tags back
 
-        // Step 3: Create updated profile event
         const updatedEvent = {
           kind: 0,
           created_at: Math.floor(Date.now() / 1000),
           tags: updatedTags,
-          content: profileEvent?.content || "",
+          content: profileEvent.content || "",
         };
 
-        // Step 4: Sign and send the updated event
         const signedEvent = await window.nostr.signEvent(updatedEvent);
+
         const response = await fetch("/save_donation_addresses", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -257,10 +255,16 @@
           throw new Error(`Failed to save addresses: ${await response.text()}`);
         }
 
-        // Step 5: Refresh profile UI with updated donation tags
-        fetchUpdatedProfile();
+        alert("Donation address added successfully!");
+
+        // **Fetch updated profile immediately before refreshing**
+        await fetchUpdatedProfile();
+
+        setTimeout(() => {
+          window.location.reload();
+        }, 500);
       } catch (error) {
-        console.error("Error updating donation addresses:", error);
+        console.error("❌ Error updating donation addresses:", error);
         alert(`Error: ${error.message}`);
       }
     });
@@ -272,25 +276,29 @@
       if (!response.ok) throw new Error("Failed to fetch updated profile");
 
       const data = await response.json();
-      const donationList = document.getElementById("donation-list");
-      donationList.innerHTML = ""; // Clear current list
+      console.log("🛠️ Updated Profile Data:", data);
 
-      // Append new donation addresses
+      const donationList = document.getElementById("donation-list");
+      donationList.innerHTML = "";
+
       if (data.tags.length > 0) {
         data.tags.forEach((tag) => {
-          if (tag[0] === "i") {
+          if (tag[0] === "w") {
+            console.log("✅ Found donation tag:", tag);
             const li = document.createElement("li");
             li.className = "p-3 rounded-lg bg-bgSecondary shadow";
-            li.innerHTML = `<strong class="text-lg">${tag[1]}</strong> (${tag[2]}): <span class="text-sm break-all">${tag[3]}</span>`;
+            li.innerHTML = `<strong>${tag[1]}</strong>: <span>${
+              tag[2]
+            }</span> ${tag.length > 3 ? `(${tag[3]})` : ""}`;
             donationList.appendChild(li);
           }
         });
       } else {
         donationList.innerHTML =
-          '<p class="text-center text-sm text-textMuted">No donation addresses set yet.</p>';
+          '<p class="text-sm text-center text-textMuted">No donation addresses set yet.</p>';
       }
     } catch (error) {
-      console.error("Failed to refresh profile:", error);
+      console.error("❌ Failed to refresh profile:", error);
     }
   }
 
@@ -300,22 +308,33 @@
       const ws = new WebSocket(relay);
 
       ws.onopen = () => {
-        const filter = { kinds: [0], authors: [pubkey], limit: 1 };
-        const subscription = ["REQ", "profile-req", filter];
-        ws.send(JSON.stringify(subscription));
+        const filter = {
+          kinds: [0], // Kind 0 = Profile Metadata
+          authors: [pubkey], // Get only the user's profile
+          limit: 1, // Only fetch the latest event
+        };
+        ws.send(JSON.stringify(["REQ", "profile-req", filter]));
       };
 
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data[0] === "EVENT") {
+          console.log("✅ Received profile event from relay:", data);
+
+          const profileEvent = data[2];
+
+          // **Debug Log: Check if we're getting all the `w` tags**
+          console.log("🔍 Raw Profile Tags from Relay:", profileEvent.tags);
+
           ws.close();
-          resolve(data[2]); // Return the profile event
+          resolve(profileEvent);
         }
       };
 
       ws.onerror = (err) => {
+        console.error("❌ WebSocket error:", err);
         ws.close();
-        reject(`Failed to fetch profile: ${err}`);
+        reject("Failed to fetch profile.");
       };
 
       setTimeout(() => {

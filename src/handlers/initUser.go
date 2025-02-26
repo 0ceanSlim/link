@@ -70,11 +70,11 @@ func InitUser(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Fetched user metadata: %+v\n", userContent)
 
-	// Extract only donation-related `i` tags
+	// Extract only donation-related `w` tags
 	var donationTags [][]string
 	for _, tag := range userContent.Tags {
-		if len(tag) >= 4 && tag[0] == "i" {
-			donationTags = append(donationTags, tag)
+		if len(tag) >= 3 && tag[0] == "w" {
+			donationTags = append(donationTags, tag) // ["w", "ASSET", "ADDRESS", "NETWORK(optional)"]
 		}
 	}
 

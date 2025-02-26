@@ -3,8 +3,10 @@ package utils
 import (
 	"html/template"
 	"link/src/types"
+	"log"
 	"net/http"
 	"path/filepath"
+	"strings"
 )
 
 type PageData struct {
@@ -40,6 +42,14 @@ var layout = PrependDir(templatesDir, templateFiles)
 
 var loginLayout = PrependDir(templatesDir, []string{"login-layout.html", "footer.html"})
 
+func splitString(input, sep string, index int) string {
+	parts := strings.Split(input, sep)
+	if index >= 0 && index < len(parts) {
+		return parts[index]
+	}
+	return ""
+}
+
 func RenderTemplate(w http.ResponseWriter, data PageData, view string, useLoginLayout bool) {
 	viewTemplate := filepath.Join(viewsDir, view)
 	componentPattern := filepath.Join(viewsDir, "components", "*.html")
@@ -59,8 +69,10 @@ func RenderTemplate(w http.ResponseWriter, data PageData, view string, useLoginL
 
 	tmpl, err := template.New("").Funcs(template.FuncMap{
 		"formatTimestamp":   formatTimestamp,
-		"renderNoteContent": renderNoteContent, // Register the content rendering function
+		"renderNoteContent": renderNoteContent,
+		"splitString":       splitString,
 	}).ParseFiles(templates...)
+
 	if err != nil {
 		http.Error(w, "Error parsing templates: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -70,8 +82,9 @@ func RenderTemplate(w http.ResponseWriter, data PageData, view string, useLoginL
 	if useLoginLayout {
 		layoutName = "login-layout"
 	}
+
 	err = tmpl.ExecuteTemplate(w, layoutName, data)
 	if err != nil {
-		http.Error(w, "Error executing template: "+err.Error(), http.StatusInternalServerError)
+		log.Printf("❌ Error executing template: %v", err)
 	}
 }

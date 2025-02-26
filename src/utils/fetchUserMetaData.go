@@ -79,11 +79,20 @@ func FetchUserMetadata(publicKey string, relays []string) (*types.UserMetadata, 
 					continue
 				}
 
-				// Extract donation tags
+				// Extract donation tags (look for "w" instead of "i")
 				var donationTags [][]string
 				for _, tag := range event.Tags {
-					if len(tag) >= 4 && tag[0] == "i" {
-						donationTags = append(donationTags, tag)
+					if len(tag) >= 3 && tag[0] == "w" { 
+						duplicate := false
+						for _, existingTag := range donationTags {
+							if tag[1] == existingTag[1] && tag[2] == existingTag[2] && (len(tag) < 4 || tag[3] == existingTag[3]) {
+								duplicate = true
+								break
+							}
+						}
+						if !duplicate {
+							donationTags = append(donationTags, tag)
+						}
 					}
 				}
 

@@ -12,7 +12,7 @@ import (
 	"github.com/nbd-wtf/go-nostr"
 )
 
-// SaveDonationAddresses saves signed donation addresses and updates session data
+// SaveDonationAddresses updates donation addresses and ensures session updates immediately
 func SaveDonationAddresses(w http.ResponseWriter, r *http.Request) {
 	session, _ := User.Get(r, "session-name")
 
@@ -38,7 +38,7 @@ func SaveDonationAddresses(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Send event to relays
+	// **Send the signed event to Nostr relays**
 	results := map[string]string{}
 	for _, relay := range relays.Both {
 		err := utils.SendToRelay(relay, signedEvent)
@@ -50,10 +50,8 @@ func SaveDonationAddresses(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Wait briefly to ensure relay processes the event
-	time.Sleep(200)
-
-	// Fetch updated user metadata
+	// **Wait briefly, then fetch the latest metadata from Nostr**
+	time.Sleep(500 * time.Millisecond) // Allow relays to process the event
 	updatedMetadata, err := utils.FetchUserMetadata(publicKey, relays.ToStringSlice())
 	if err != nil || updatedMetadata == nil {
 		log.Println("⚠️ Failed to fetch updated user metadata")
@@ -61,9 +59,15 @@ func SaveDonationAddresses(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update session with new donation tags
+	// ✅ **Update session with latest `w` tags**
 	session.Values["donationTags"] = updatedMetadata.Tags
-	session.Save(r, w)
+	log.Printf("✅ Updated Session Donation Tags After Removal: %+v", updatedMetadata.Tags)
+
+	if err := session.Save(r, w); err != nil {
+		log.Printf("❌ Error saving session: %v", err)
+		http.Error(w, "Failed to save session", http.StatusInternalServerError)
+		return
+	}
 
 	// Return success response
 	w.Header().Set("Content-Type", "application/json")
