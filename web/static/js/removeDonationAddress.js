@@ -5,11 +5,8 @@ async function removeDonationAddress(asset, address, network = "") {
   }
 
   try {
-    const pubkey = await window.nostr.getPublicKey();
-    const relay = "wss://wheat.happytavern.co";
-
     // ✅ Fetch latest profile event (from relay)
-    const profileEvent = await fetchLatestProfile(pubkey, relay);
+    const profileEvent = await fetchUpdatedProfile();
     if (!profileEvent) {
       alert("Failed to fetch profile event.");
       return;
@@ -17,7 +14,13 @@ async function removeDonationAddress(asset, address, network = "") {
 
     // ✅ Remove the selected `w` tag
     let updatedTags = profileEvent.tags.filter(
-      (tag) => !(tag[0] === "w" && tag[1] === asset && tag[2] === address && (tag.length === 3 || tag[3] === network))
+      (tag) =>
+        !(
+          tag[0] === "w" &&
+          tag[1] === asset &&
+          tag[2] === address &&
+          (tag.length === 3 || tag[3] === network)
+        )
     );
 
     console.log("✅ Updated tags after removal:", updatedTags);

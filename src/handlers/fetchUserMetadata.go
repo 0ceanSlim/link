@@ -9,7 +9,7 @@ import (
 // FetchUserMetadataHandler exposes user metadata to the frontend
 func FetchUserMetadataHandler(w http.ResponseWriter, r *http.Request) {
 	session, _ := User.Get(r, "session-name")
-	publicKey, ok := session.Values["publicKey"].(string)
+	publicKey, ok := session.Values["UserPublicKey"].(string)
 
 	if !ok || publicKey == "" {
 		sendJSONError(w, "User not authenticated", http.StatusUnauthorized)
