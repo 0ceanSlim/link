@@ -2,7 +2,6 @@ package utils
 
 import (
 	"html/template"
-	"link/src/types"
 	"log"
 	"net/http"
 	"path/filepath"
@@ -18,10 +17,8 @@ type PageData struct {
 	Picture       string
 	About         string
 	Relays        RelayList
-	Message       string
 	SuccessRelays []string
 	FailedRelays  []string
-	Notes         []types.NostrEvent
 	DonationTags  [][]string
 	IsOwnProfile  bool // ✅ Added field to check if logged-in user is viewing their own profile
 }
