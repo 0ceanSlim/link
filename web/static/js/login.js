@@ -1,23 +1,39 @@
 document.getElementById("login-button").onclick = async function () {
   if (window.nostr) {
     try {
-      const publicKey = await window.nostr.getPublicKey();
-      const response = await fetch("/init-user", {
+      const publicKeyHex = await window.nostr.getPublicKey();
+
+      // Step 1: Initialize the user session
+      const initResponse = await fetch("/init-user", {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
         },
-        body: new URLSearchParams({ publicKey }).toString(),
+        body: new URLSearchParams({ publicKey: publicKeyHex }).toString(),
       });
 
-      if (response.ok) {
-        // Redirect to root ("/") after login
-        window.location.href = "/";
+      if (!initResponse.ok) {
+        console.error("User initialization failed.");
+        return;
+      }
+
+      // Step 2: Convert hex key to npub
+      const encodeResponse = await fetch("/encode-key", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({ publicKey: publicKeyHex }).toString(),
+      });
+
+      if (encodeResponse.ok) {
+        const data = await encodeResponse.json(); // Expecting { "npub": "<npub-value>" }
+        window.location.href = `/${data.npub}`; // ✅ Redirect to profile page
       } else {
-        console.error("Login failed.");
+        console.error("Failed to convert public key.");
       }
     } catch (err) {
-      console.error("Failed to get public key:", err);
+      console.error("Login process failed:", err);
     }
   } else {
     alert("Nostr extension not available.");

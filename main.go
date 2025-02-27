@@ -22,10 +22,13 @@ func main() {
 	mux.HandleFunc("/login", routes.Login) // Login route
 	mux.HandleFunc("/init-user", handlers.InitUser)
 	mux.HandleFunc("/logout", handlers.LogoutHandler) // Logout process
+	mux.HandleFunc("/encode-key", handlers.EncodeKeyHandler)
+
 
 	// Initialize Routes
-	mux.HandleFunc("/", routes.Index)
+	//mux.HandleFunc("/", routes.Index)
 	mux.HandleFunc("/settings", routes.Settings)
+	mux.HandleFunc("/", routes.ProfileHandler)
 
 	// Function Handlers
 	mux.HandleFunc("/save_donation_addresses", handlers.SaveDonationAddresses)

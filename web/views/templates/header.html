@@ -1,5 +1,6 @@
 {{define "header"}}
 <header class="flex items-center justify-between mb-8">
-  {{template "app-name"}} {{template "dropdown" .}}
+  {{template "app-name"}} {{if and .UserPublicKey (ne .UserPublicKey "")}}
+  {{template "dropdown" .}} {{else}} {{template "login-nip07"}} {{end}}
 </header>
 {{end}}

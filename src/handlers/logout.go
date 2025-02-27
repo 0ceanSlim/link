@@ -25,6 +25,6 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("Session cleared successfully")
 
 	// Redirect to the root ("/")
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, "/login", http.StatusSeeOther)
 	log.Println("Redirecting to / after logout")
 }

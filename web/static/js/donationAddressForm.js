@@ -31,9 +31,7 @@ document
     }
 
     try {
-      const pubkey = await window.nostr.getPublicKey();
-      const relay = "wss://wheat.happytavern.co";
-      const profileEvent = await fetchLatestProfile(pubkey, relay);
+      const profileEvent = await fetchUpdatedProfile();
 
       if (!profileEvent || !profileEvent.tags) {
         alert("Failed to fetch existing donation addresses.");
@@ -91,78 +89,23 @@ document
     }
   });
 
-  async function fetchUpdatedProfile() {
-    try {
-      const response = await fetch("/fetch_user_metadata");
-      if (!response.ok) throw new Error("Failed to fetch updated profile");
-  
-      const data = await response.json();
-      updateDonationList(data.tags);
-    } catch (error) {
-      console.error("❌ Failed to refresh profile:", error);
-    }
-  }
-  
-  function updateDonationList(tags) {
-    const donationList = document.getElementById("donation-list");
-    donationList.innerHTML = "";
-  
-    if (tags.length > 0) {
-      tags.forEach((tag) => {
-        if (tag[0] === "w") {
-          const li = document.createElement("li");
-          li.className = "p-3 rounded-lg shadow bg-bgSecondary";
-          li.innerHTML = `<strong>${tag[1]}</strong>: <span>${tag[2]}</span> ${
-            tag.length > 3 ? `(${tag[3]})` : ""
-          } <button onclick="removeDonationAddress('${tag[1]}', '${tag[2]}', '${tag[3] || ''}')">Remove</button>`;
-          donationList.appendChild(li);
-        }
-      });
-    } else {
-      donationList.innerHTML =
-        '<p class="text-sm text-center text-textMuted">No donation addresses set yet.</p>';
-    }
-  }
-  
+let count = 1;
 
-// Fetch the user's latest kind: 0 profile event
-async function fetchLatestProfile(pubkey, relay) {
-  return new Promise((resolve, reject) => {
-    const ws = new WebSocket(relay);
+function addField() {
+  const container = document.getElementById("donation-fields");
+  const div = document.createElement("div");
+  div.className =
+    "flex flex-col gap-2 p-4 rounded-lg shadow donation-group bg-bgSecondary";
+  div.innerHTML = `
+      <input type="text" name="ticker_${count}" placeholder="Asset Ticker (e.g., BTC)" class="p-2 border rounded border-bgInverted focus:ring focus:ring-accent" required>
+      <input type="text" name="network_${count}" placeholder="Network (e.g., Bitcoin)" class="p-2 border rounded border-bgInverted focus:ring focus:ring-accent" required>
+      <input type="text" name="address_${count}" placeholder="Receiving Address" class="p-2 border rounded border-bgInverted focus:ring focus:ring-accent" required>
+      <button type="button" onclick="removeField(this)" class="px-4 py-1 mt-2 text-sm font-semibold text-white bg-red-500 rounded-lg shadow hover:bg-red-600">Remove</button>
+    `;
+  container.appendChild(div);
+  count++;
+}
 
-    ws.onopen = () => {
-      const filter = {
-        kinds: [0], // Kind 0 = Profile Metadata
-        authors: [pubkey], // Get only the user's profile
-        limit: 1, // Only fetch the latest event
-      };
-      ws.send(JSON.stringify(["REQ", "profile-req", filter]));
-    };
-
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data[0] === "EVENT") {
-        console.log("✅ Received profile event from relay:", data);
-
-        const profileEvent = data[2];
-
-        // **Debug Log: Check if we're getting all the `w` tags**
-        console.log("🔍 Raw Profile Tags from Relay:", profileEvent.tags);
-
-        ws.close();
-        resolve(profileEvent);
-      }
-    };
-
-    ws.onerror = (err) => {
-      console.error("❌ WebSocket error:", err);
-      ws.close();
-      reject("Failed to fetch profile.");
-    };
-
-    setTimeout(() => {
-      ws.close();
-      reject("Timeout fetching profile.");
-    }, 5000);
-  });
+function removeField(button) {
+  button.parentElement.remove();
 }

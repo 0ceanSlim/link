@@ -12,6 +12,7 @@ import (
 type PageData struct {
 	Title         string
 	Theme         string
+	UserPublicKey string
 	PublicKey     string
 	DisplayName   string
 	Picture       string
@@ -21,8 +22,10 @@ type PageData struct {
 	SuccessRelays []string
 	FailedRelays  []string
 	Notes         []types.NostrEvent
-	DonationTags  [][]string // Add this field to store donation addresses
+	DonationTags  [][]string
+	IsOwnProfile  bool // ✅ Added field to check if logged-in user is viewing their own profile
 }
+
 
 // Define the base directories for views and templates
 const (

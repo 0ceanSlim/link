@@ -16,11 +16,10 @@
 
 <!-- Donation Addresses -->
 <div class="w-full max-w-2xl p-6 mt-6 rounded-lg bg-bgPrimary">
-  <h3 class="mb-4 text-xl font-semibold text-center">
-    Your Donation Addresses
-  </h3>
+  <h3 class="mb-4 text-xl font-semibold text-center">Donation Addresses</h3>
   <ul id="donation-list" class="space-y-2 text-left">
-    {{if .DonationTags}} {{range .DonationTags}}
+    {{if .DonationTags}} {{range .DonationTags}} {{if (ge (len .) 3)}}
+    <!-- Ensure it has at least 3 elements -->
     <li
       class="flex items-center justify-between p-3 rounded-lg shadow bg-bgSecondary"
     >
@@ -29,13 +28,15 @@
         <span class="text-sm break-all">{{index . 2}}</span>
         {{if (gt (len .) 3)}} ({{index . 3}}) {{end}}
       </div>
+      {{if $.IsOwnProfile}}
       <button
         onclick="removeDonationAddress('{{index . 1}}', '{{index . 2}}', '{{if (gt (len .) 3)}}{{index . 3}}{{end}}')"
       >
         Remove
       </button>
+      {{end}}
     </li>
-    {{end}} {{else}}
+    {{end}} {{end}} {{else}}
     <p class="text-sm text-center text-textMuted">
       No donation addresses set yet.
     </p>
@@ -43,7 +44,8 @@
   </ul>
 </div>
 
-<!-- Add Donation Address Form -->
+<!-- Add Donation Address Form - Only Show if Logged-in User -->
+{{if .IsOwnProfile}}
 <div class="w-full max-w-2xl p-6 mt-6 rounded-lg bg-bgPrimary">
   <h3 class="mb-4 text-xl font-semibold text-center">
     Add New Donation Address
@@ -78,14 +80,27 @@
     </div>
 
     <div class="flex flex-col gap-2 mt-4 sm:flex-row">
-      <button type="button" onclick="addField()">+ Add More</button>
-      <button type="submit">Save</button>
+      <button
+        class="p-2 m-2 bg-green-500 rounded-md hover:bg-green-700"
+        type="button"
+        onclick="addField()"
+      >
+        + Add More
+      </button>
+      <button
+        type="submit"
+        class="p-2 m-2 bg-purple-500 rounded-md hover:bg-purple-700"
+      >
+        Save
+      </button>
     </div>
   </form>
 </div>
+{{end}}
 
-<script src="static/js/removeDonationAddress.js"></script>
-
-<script src="static/js/donationAddressForm.js"></script>
+<script src="/static/js/removeDonationAddress.js"></script>
+<script src="/static/js/donationAddressForm.js"></script>
+<script src="/static/js/fetchUpdatedProfile.js"></script>
+<script src="/static/js/updateDonationLists.js"></script>
 
 {{end}}

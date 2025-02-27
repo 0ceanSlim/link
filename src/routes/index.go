@@ -2,65 +2,88 @@ package routes
 
 import (
 	"link/src/handlers"
-	"link/src/types"
 	"link/src/utils"
 	"log"
 	"net/http"
+	"strings"
 )
 
-func Index(w http.ResponseWriter, r *http.Request) {
-	session, _ := handlers.User.Get(r, "session-name")
+// ProfileHandler serves both the index ("/") and profile pages ("/p/<npub>")
+func ProfileHandler(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
 
-	publicKey, ok := session.Values["publicKey"].(string)
-	if !ok || publicKey == "" {
-		log.Println("⚠️ No publicKey found in session. Redirecting to login.")
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	session, _ := handlers.User.Get(r, "session-name")
+	userPublicKey, _ := session.Values["UserPublicKey"].(string)
+
+	// If user is not logged in and is at "/", redirect to login
+	if path == "/" {
+		if userPublicKey == "" {
+			log.Println("⚠️ No UserPublicKey found in session. Redirecting to login.")
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+
+		// Convert hex public key to npub and redirect to /p/<npub>
+		npub, err := utils.EncodeNpub(userPublicKey)
+		if err != nil {
+			log.Printf("❌ Failed to encode UserPublicKey to npub: %v", err)
+			http.Error(w, "Failed to encode public key", http.StatusInternalServerError)
+			return
+		}
+
+		log.Printf("🔄 Redirecting logged-in user to /p/%s", npub)
+		http.Redirect(w, r, "/"+npub, http.StatusSeeOther)
 		return
 	}
 
-	log.Printf("✅ Session data found: publicKey=%s", publicKey)
+	// If the path starts with "/p/", treat it as a profile view
+	if strings.HasPrefix(path, "/") {
+		npub := strings.TrimPrefix(path, "/")
 
-	displayName, _ := session.Values["displayName"].(string)
-	picture, _ := session.Values["picture"].(string)
-	about, _ := session.Values["about"].(string)
+		// Convert npub to hex pubkey
+		pubKey, err := utils.DecodeNpub(npub)
+		if err != nil {
+			http.Error(w, "Invalid npub", http.StatusBadRequest)
+			return
+		}
 
-	log.Printf("✅ DisplayName=%s, Picture=%s, About=%s", displayName, picture, about)
+		// Determine if the logged-in user is viewing their own profile
+		isOwnProfile := userPublicKey == pubKey
 
-	relays, ok := session.Values["relays"].(utils.RelayList)
-	if !ok {
-		log.Println("⚠️ No relay list found in session")
-		relays = utils.RelayList{}
+		// Fetch relays for the public key
+		relays, err := utils.FetchUserRelays(pubKey, []string{
+			"wss://purplepag.es", "wss://relay.damus.io", "wss://nos.lol",
+			"wss://relay.primal.net", "wss://relay.nostr.band", "wss://offchain.pub",
+		})
+		if err != nil {
+			log.Printf("Failed to fetch user relays: %v", err)
+		}
+
+		// Get user metadata
+		metadata, err := utils.FetchUserMetadata(pubKey, relays.ToStringSlice())
+		if err != nil {
+			http.Error(w, "Failed to fetch user metadata", http.StatusInternalServerError)
+			return
+		}
+
+		// Prepare page data
+		data := utils.PageData{
+			Title:         metadata.DisplayName + "'s Profile",
+			DisplayName:   metadata.DisplayName,
+			Picture:       metadata.Picture,
+			PublicKey:     pubKey,
+			UserPublicKey: userPublicKey,
+			About:         metadata.About,
+			Relays:        *relays,
+			DonationTags:  metadata.Tags,
+			IsOwnProfile:  isOwnProfile,
+		}
+
+		// Render profile template
+		utils.RenderTemplate(w, data, "index.html", false)
+		return
 	}
 
-	relayURLs := relays.ToStringSlice()
-
-	// Fetch last 10 kind 1 notes
-	notes, err := utils.FetchLast10Kind1Notes(publicKey, relayURLs)
-	if err != nil {
-		log.Printf("⚠️ Failed to fetch notes: %v", err)
-		notes = []types.NostrEvent{}
-	}
-
-	// ✅ Get donation addresses from session
-	donationTags, ok := session.Values["donationTags"].([][]string)
-	if !ok {
-		log.Println("⚠️ No donation tags found in session")
-		donationTags = [][]string{} // Default to empty
-	} else {
-		log.Printf("✅ DonationTags: %+v", donationTags)
-	}
-
-	// Construct page data
-	data := utils.PageData{
-		Title:        "Dashboard",
-		DisplayName:  displayName,
-		Picture:      picture,
-		PublicKey:    publicKey,
-		About:        about,
-		Relays:       relays,
-		Notes:        notes,
-		DonationTags: donationTags, // ✅ Pass donation addresses to template
-	}
-
-	utils.RenderTemplate(w, data, "index.html", false)
+	// If the route does not match known paths, return 404
+	http.NotFound(w, r)
 }

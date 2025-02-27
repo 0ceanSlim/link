@@ -80,9 +80,17 @@ func InitUser(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("✅ Extracted Donation Tags: %+v", donationTags)
 
+	// Convert publicKey to npub
+	npub, err := utils.EncodeNpub(publicKey)
+	if err != nil {
+		log.Printf("Failed to encode publicKey to npub: %v\n", err)
+		http.Error(w, "Failed to encode public key", http.StatusInternalServerError)
+		return
+	}
+
 	// Save session
 	session, _ := User.Get(r, "session-name")
-	session.Values["publicKey"] = publicKey
+	session.Values["UserPublicKey"] = publicKey // Store logged-in user's public key in the correct field
 	session.Values["displayName"] = userContent.DisplayName
 	session.Values["picture"] = userContent.Picture
 	session.Values["about"] = userContent.About
@@ -98,7 +106,8 @@ func InitUser(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("✅ Session saved successfully")
 
-	// Redirect
-	http.Redirect(w, r, "/", http.StatusSeeOther)
-	log.Println("🔄 Redirecting to /")
+	// Redirect to /p/<npub>
+	http.Redirect(w, r, "/"+npub, http.StatusSeeOther)
+	log.Printf("🔄 Redirecting to /%s", npub)
 }
+
