@@ -13,8 +13,8 @@ import (
 
 const WebSocketTimeout = 3 * time.Second // Increased timeout
 
-// FetchUserMetadata fetches the latest kind: 0 profile event from all relays
-func FetchUserMetadata(publicKey string, relays []string) (*types.UserMetadata, error) {
+
+func FetchUserMetadata(publicKey string, relays []string) (*types.NostrEvent, error) {
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	var latestEvent *types.NostrEvent
@@ -97,16 +97,6 @@ func FetchUserMetadata(publicKey string, relays []string) (*types.UserMetadata, 
 		return nil, nil
 	}
 
-	// Parse metadata content
-	var metadata types.UserMetadata
-	if err := json.Unmarshal([]byte(latestEvent.Content), &metadata); err != nil {
-		log.Printf("❌ Failed to parse metadata JSON: %v\n", err)
-		return nil, err
-	}
-
-	// ✅ Preserve all tags, not just donation ones
-	metadata.Tags = latestEvent.Tags
-
-	log.Printf("✅ Latest metadata selected: %+v\n", metadata)
-	return &metadata, nil
+	log.Printf("✅ Latest raw metadata event selected: %+v\n", latestEvent)
+	return latestEvent, nil
 }

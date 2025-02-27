@@ -31,7 +31,7 @@ document
     }
 
     try {
-      const profileEvent = await fetchUpdatedProfile();
+      const profileEvent = await fetchUpdatedProfile(); // This should fetch the current user profile stored in session
 
       if (!profileEvent || !profileEvent.tags) {
         alert("Failed to fetch existing donation addresses.");

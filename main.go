@@ -23,6 +23,8 @@ func main() {
 	mux.HandleFunc("/init-user", handlers.InitUser)
 	mux.HandleFunc("/logout", handlers.LogoutHandler) // Logout process
 	mux.HandleFunc("/encode-key", handlers.EncodeKeyHandler)
+	mux.HandleFunc("/get-session", handlers.GetSessionHandler)
+
 
 
 	// Initialize Routes

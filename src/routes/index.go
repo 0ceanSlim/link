@@ -1,7 +1,9 @@
 package routes
 
 import (
+	"encoding/json"
 	"link/src/handlers"
+	"link/src/types"
 	"link/src/utils"
 	"log"
 	"net/http"
@@ -59,10 +61,22 @@ func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 			log.Printf("Failed to fetch user relays: %v", err)
 		}
 
-		// Get user metadata
-		metadata, err := utils.FetchUserMetadata(pubKey, relays.ToStringSlice())
+		// Get user metadata (raw NostrEvent)
+		userEvent, err := utils.FetchUserMetadata(pubKey, relays.ToStringSlice())
 		if err != nil {
 			http.Error(w, "Failed to fetch user metadata", http.StatusInternalServerError)
+			return
+		}
+		if userEvent == nil {
+			http.Error(w, "User metadata not found", http.StatusNotFound)
+			return
+		}
+
+		// Parse `Content` JSON into `UserMetadata`
+		var metadata types.UserMetadata
+		if err := json.Unmarshal([]byte(userEvent.Content), &metadata); err != nil {
+			log.Printf("❌ Failed to parse user metadata JSON: %v", err)
+			http.Error(w, "Failed to parse user metadata", http.StatusInternalServerError)
 			return
 		}
 
@@ -75,7 +89,7 @@ func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 			UserPublicKey: userPublicKey,
 			About:         metadata.About,
 			Relays:        *relays,
-			DonationTags:  metadata.Tags,
+			DonationTags:  userEvent.Tags, // ✅ Keep all tags, not just donation tags
 			IsOwnProfile:  isOwnProfile,
 		}
 
