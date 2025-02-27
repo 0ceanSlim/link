@@ -72,7 +72,6 @@ func RenderTemplate(w http.ResponseWriter, data PageData, view string, useLoginL
 
 	tmpl, err := template.New("").Funcs(template.FuncMap{
 		"formatTimestamp":   formatTimestamp,
-		"renderNoteContent": renderNoteContent,
 		"splitString":       splitString,
 	}).ParseFiles(templates...)
 
