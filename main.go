@@ -29,6 +29,7 @@ func main() {
 
 	// Function Handlers
 	mux.HandleFunc("/save_donation_addresses", handlers.SaveDonationAddresses)
+	mux.HandleFunc("/fetch_user_metadata", handlers.FetchUserMetadataHandler)
 
 	// Serve Web Files
 	// Serve specific files from the root directory

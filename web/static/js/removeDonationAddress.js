@@ -7,26 +7,22 @@ async function removeDonationAddress(asset, address, network = "") {
   try {
     const pubkey = await window.nostr.getPublicKey();
     const relay = "wss://wheat.happytavern.co";
-    const profileEvent = await fetchLatestProfile(pubkey, relay);
 
+    // ✅ Fetch latest profile event (from relay)
+    const profileEvent = await fetchLatestProfile(pubkey, relay);
     if (!profileEvent) {
       alert("Failed to fetch profile event.");
       return;
     }
 
-    // **Remove the selected `w` tag**
-    let updatedTags = profileEvent.tags.filter((tag) => {
-      return !(
-        tag[0] === "w" &&
-        tag[1] === asset &&
-        tag[2] === address &&
-        (tag.length === 3 || tag[3] === network)
-      );
-    });
+    // ✅ Remove the selected `w` tag
+    let updatedTags = profileEvent.tags.filter(
+      (tag) => !(tag[0] === "w" && tag[1] === asset && tag[2] === address && (tag.length === 3 || tag[3] === network))
+    );
 
     console.log("✅ Updated tags after removal:", updatedTags);
 
-    // **Create and sign the updated kind 0 profile event**
+    // ✅ Create & sign updated profile event
     const updatedEvent = {
       kind: 0,
       created_at: Math.floor(Date.now() / 1000),
@@ -38,7 +34,7 @@ async function removeDonationAddress(asset, address, network = "") {
     const signedEvent = await window.nostr.signEvent(updatedEvent);
     console.log("✅ Signed Event:", signedEvent);
 
-    // **Send the updated event**
+    // ✅ Send the signed event to Go, let Go handle relays & session update
     const response = await fetch("/save_donation_addresses", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -51,14 +47,10 @@ async function removeDonationAddress(asset, address, network = "") {
 
     console.log("✅ Profile updated successfully!");
 
-    // **Fetch updated profile before reloading**
+    // ✅ Fetch updated profile from Go & update UI
     await fetchUpdatedProfile();
 
     alert("Donation address removed successfully!");
-
-    setTimeout(() => {
-      window.location.reload();
-    }, 500); // ✅ Small delay before refreshing
   } catch (error) {
     console.error("❌ Error updating profile:", error);
     alert(`Error: ${error.message}`);

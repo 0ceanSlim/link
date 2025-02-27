@@ -91,27 +91,30 @@ document
     }
   });
 
-// Fetch the updated profile metadata and update the UI
-async function fetchUpdatedProfile() {
-  try {
-    const response = await fetch("/fetch_user_metadata");
-    if (!response.ok) throw new Error("Failed to fetch updated profile");
-
-    const data = await response.json();
-    console.log("🛠️ Updated Profile Data:", data);
-
+  async function fetchUpdatedProfile() {
+    try {
+      const response = await fetch("/fetch_user_metadata");
+      if (!response.ok) throw new Error("Failed to fetch updated profile");
+  
+      const data = await response.json();
+      updateDonationList(data.tags);
+    } catch (error) {
+      console.error("❌ Failed to refresh profile:", error);
+    }
+  }
+  
+  function updateDonationList(tags) {
     const donationList = document.getElementById("donation-list");
     donationList.innerHTML = "";
-
-    if (data.tags.length > 0) {
-      data.tags.forEach((tag) => {
+  
+    if (tags.length > 0) {
+      tags.forEach((tag) => {
         if (tag[0] === "w") {
-          console.log("✅ Found donation tag:", tag);
           const li = document.createElement("li");
           li.className = "p-3 rounded-lg shadow bg-bgSecondary";
           li.innerHTML = `<strong>${tag[1]}</strong>: <span>${tag[2]}</span> ${
             tag.length > 3 ? `(${tag[3]})` : ""
-          }`;
+          } <button onclick="removeDonationAddress('${tag[1]}', '${tag[2]}', '${tag[3] || ''}')">Remove</button>`;
           donationList.appendChild(li);
         }
       });
@@ -119,10 +122,8 @@ async function fetchUpdatedProfile() {
       donationList.innerHTML =
         '<p class="text-sm text-center text-textMuted">No donation addresses set yet.</p>';
     }
-  } catch (error) {
-    console.error("❌ Failed to refresh profile:", error);
   }
-}
+  
 
 // Fetch the user's latest kind: 0 profile event
 async function fetchLatestProfile(pubkey, relay) {
