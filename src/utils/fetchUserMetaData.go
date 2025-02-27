@@ -3,6 +3,7 @@ package utils
 import (
 	"encoding/json"
 	"log"
+	"sync"
 	"time"
 
 	"link/src/types"
@@ -10,102 +11,102 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-const WebSocketTimeout = 2 * time.Second // Set timeout duration
+const WebSocketTimeout = 3 * time.Second // Increased timeout
 
-// FetchUserMetadata fetches the latest kind: 0 profile event
+// FetchUserMetadata fetches the latest kind: 0 profile event from all relays
 func FetchUserMetadata(publicKey string, relays []string) (*types.UserMetadata, error) {
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	var latestEvent *types.NostrEvent
+	var latestCreatedAt int64
+
 	for _, url := range relays {
-		log.Printf("🔍 Connecting to relay: %s\n", url)
-		conn, _, err := websocket.DefaultDialer.Dial(url, nil)
-		if err != nil {
-			log.Printf("❌ WebSocket connection failed: %v\n", err)
-			continue
-		}
-		defer conn.Close()
+		wg.Add(1)
 
-		// Request profile data
-		filter := types.SubscriptionFilter{
-			Authors: []string{publicKey},
-			Kinds:   []int{0}, // Kind 0 = Metadata
-		}
+		go func(relayURL string) {
+			defer wg.Done()
+			log.Printf("🔍 Connecting to relay: %s\n", relayURL)
 
-		requestJSON, err := json.Marshal([]interface{}{"REQ", "sub1", filter})
-		if err != nil {
-			log.Printf("❌ Failed to marshal request: %v\n", err)
-			return nil, err
-		}
-
-		log.Printf("📡 Sending request: %s\n", requestJSON)
-
-		if err := conn.WriteMessage(websocket.TextMessage, requestJSON); err != nil {
-			log.Printf("❌ Failed to send request: %v\n", err)
-			return nil, err
-		}
-
-		// Listen for response
-		msgChan := make(chan []byte)
-		errChan := make(chan error)
-
-		go func() {
-			_, message, err := conn.ReadMessage()
+			conn, _, err := websocket.DefaultDialer.Dial(relayURL, nil)
 			if err != nil {
-				errChan <- err
-			} else {
-				msgChan <- message
+				log.Printf("❌ WebSocket connection failed (%s): %v\n", relayURL, err)
+				return
 			}
-		}()
+			defer conn.Close()
 
-		select {
-		case message := <-msgChan:
-			log.Printf("✅ Received WebSocket message: %s\n", message)
-
-			var response []interface{}
-			if err := json.Unmarshal(message, &response); err != nil {
-				log.Printf("❌ Failed to parse response: %v\n", err)
-				continue
+			// Request profile data
+			filter := types.SubscriptionFilter{
+				Authors: []string{publicKey},
+				Kinds:   []int{0}, // Kind 0 = Metadata
 			}
 
-			if response[0] == "EVENT" {
-				var event types.NostrEvent
-				eventData, _ := json.Marshal(response[2])
-				_ = json.Unmarshal(eventData, &event)
+			requestJSON, err := json.Marshal([]interface{}{"REQ", "sub1", filter})
+			if err != nil {
+				log.Printf("❌ Failed to marshal request: %v\n", err)
+				return
+			}
 
-				log.Printf("📜 Received event: %+v\n", event)
+			log.Printf("📡 Sending request to %s: %s\n", relayURL, requestJSON)
+			if err := conn.WriteMessage(websocket.TextMessage, requestJSON); err != nil {
+				log.Printf("❌ Failed to send request to %s: %v\n", relayURL, err)
+				return
+			}
 
-				// Parse metadata
-				var metadata types.UserMetadata
-				if err := json.Unmarshal([]byte(event.Content), &metadata); err != nil {
-					log.Printf("❌ Failed to parse metadata JSON: %v\n", err)
-					continue
+			// Wait for response
+			conn.SetReadDeadline(time.Now().Add(WebSocketTimeout))
+
+			for {
+				_, message, err := conn.ReadMessage()
+				if err != nil {
+					log.Printf("⚠️ Error reading from relay %s: %v\n", relayURL, err)
+					return
 				}
 
-				// Extract donation tags (look for "w" instead of "i")
-				var donationTags [][]string
-				for _, tag := range event.Tags {
-					if len(tag) >= 3 && tag[0] == "w" { 
-						duplicate := false
-						for _, existingTag := range donationTags {
-							if tag[1] == existingTag[1] && tag[2] == existingTag[2] && (len(tag) < 4 || tag[3] == existingTag[3]) {
-								duplicate = true
-								break
-							}
-						}
-						if !duplicate {
-							donationTags = append(donationTags, tag)
-						}
+				var response []interface{}
+				if err := json.Unmarshal(message, &response); err != nil {
+					log.Printf("❌ Failed to parse response from %s: %v\n", relayURL, err)
+					return
+				}
+
+				if response[0] == "EVENT" {
+					var event types.NostrEvent
+					eventData, _ := json.Marshal(response[2])
+					if err := json.Unmarshal(eventData, &event); err != nil {
+						log.Printf("❌ Failed to parse event JSON from %s: %v\n", relayURL, err)
+						continue
 					}
+
+					log.Printf("📜 Received event from %s: %+v\n", relayURL, event)
+
+					mu.Lock()
+					if event.CreatedAt > latestCreatedAt {
+						latestCreatedAt = event.CreatedAt
+						latestEvent = &event
+					}
+					mu.Unlock()
 				}
-
-				log.Printf("✅ Extracted donation tags: %+v\n", donationTags)
-
-				metadata.Tags = donationTags // Store in struct
-				return &metadata, nil
 			}
-		case err := <-errChan:
-			log.Printf("❌ WebSocket error: %v\n", err)
-		case <-time.After(2 * time.Second):
-			log.Println("⏳ WebSocket timeout")
-		}
+		}(url)
 	}
-	return nil, nil
+
+	// Wait for all goroutines to finish
+	wg.Wait()
+
+	if latestEvent == nil {
+		log.Println("❌ No metadata events received.")
+		return nil, nil
+	}
+
+	// Parse metadata content
+	var metadata types.UserMetadata
+	if err := json.Unmarshal([]byte(latestEvent.Content), &metadata); err != nil {
+		log.Printf("❌ Failed to parse metadata JSON: %v\n", err)
+		return nil, err
+	}
+
+	// ✅ Preserve all tags, not just donation ones
+	metadata.Tags = latestEvent.Tags
+
+	log.Printf("✅ Latest metadata selected: %+v\n", metadata)
+	return &metadata, nil
 }
