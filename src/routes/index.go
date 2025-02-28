@@ -56,7 +56,7 @@ func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 		var metadata types.UserMetadata
 		var donationTags [][]string
 		var relays utils.RelayList
-
+		
 		if isOwnProfile {
 			// Fetch data from cache for own profile
 			cachedData, found := cache.GetUserData(pubKey)
@@ -129,6 +129,7 @@ func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 			Relays:        relays,
 			DonationTags:  donationTags,
 			IsOwnProfile:  isOwnProfile,
+			Npub:          npub,
 		}
 
 		// Render profile template

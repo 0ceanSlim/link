@@ -1,0 +1,38 @@
+{{define "search"}}
+<div
+  class="relative flex items-center p-2 border rounded-lg border-bgInverted bg-bgSecondary"
+>
+  <input
+    type="text"
+    id="search-input"
+    placeholder="Enter npub..."
+    class="w-full p-2 pr-10 bg-transparent border-none text-textPrimary placeholder-textMuted focus:outline-none"
+  />
+  <button
+    id="search-button"
+    class="absolute p-2 transition-colors duration-200 right-3 text-textSecondary hover:text-textPrimary"
+  >
+    🔍
+  </button>
+</div>
+
+<script>
+  document
+    .getElementById("search-button")
+    .addEventListener("click", searchNpub);
+  document
+    .getElementById("search-input")
+    .addEventListener("keypress", function (event) {
+      if (event.key === "Enter") {
+        searchNpub();
+      }
+    });
+
+  function searchNpub() {
+    const npub = document.getElementById("search-input").value.trim();
+    if (npub) {
+      window.location.href = `/${npub}`;
+    }
+  }
+</script>
+{{end}}

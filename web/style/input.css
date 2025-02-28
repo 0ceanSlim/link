@@ -13,6 +13,7 @@
     --color-textSecondary: rgb(235, 235, 235);
     --color-textMuted: rgb(200, 200, 200);
     --color-textInverted: rgb(16, 16, 16);
+    --color-textHighlighted: rgb(119, 89, 151);
   }
   :root[data-theme="light"] {
     --color-bgPrimary: rgb(230, 230, 230);
@@ -22,6 +23,7 @@
     --color-textSecondary: rgb(20, 20, 20);
     --color-textMuted: rgb(100, 100, 100);
     --color-textInverted: rgb(255, 255, 255);
+    --color-textHighlighted: rgb(119, 89, 151);
   }
   :root[data-theme="midnight"] {
     --color-bgPrimary: rgb(25, 24, 48);
@@ -30,6 +32,7 @@
     --color-text: rgb(206, 197, 255);
     --color-textMuted: rgb(102, 241, 255);
     --color-textInverted: rgb(236, 208, 0);
+    --color-textHighlighted: rgb(119, 89, 151);
   }
   :root[data-theme="lava"] {
     --color-bgPrimary: rgb(57, 0, 0);
@@ -38,6 +41,7 @@
     --color-text: rgb(241, 39, 39);
     --color-textMuted: rgb(102, 241, 255);
     --color-textInverted: rgb(236, 208, 0);
+    --color-textHighlighted: rgb(119, 89, 151);
   }
   :root[data-theme="solar"] {
     --color-bgPrimary: rgb(0, 43, 54);
@@ -46,6 +50,7 @@
     --color-text: rgb(55, 148, 255);
     --color-textMuted: rgb(102, 241, 255);
     --color-textInverted: rgb(236, 208, 0);
+    --color-textHighlighted: rgb(119, 89, 151);
   }
 
   /* Webkit scrollbar styles */

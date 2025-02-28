@@ -50,10 +50,14 @@ async function removeDonationAddress(asset, address, network = "") {
 
     console.log("✅ Profile updated successfully!");
 
+    alert("Donation address removed successfully!");
+
     // ✅ Fetch updated profile from Go & update UI
     await fetchUpdatedProfile();
 
-    alert("Donation address removed successfully!");
+    setTimeout(() => {
+      window.location.reload();
+    }, 500);
   } catch (error) {
     console.error("❌ Error updating profile:", error);
     alert(`Error: ${error.message}`);

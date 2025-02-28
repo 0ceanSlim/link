@@ -4,6 +4,7 @@ import (
 	"html/template"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -21,8 +22,15 @@ type PageData struct {
 	FailedRelays  []string
 	DonationTags  [][]string
 	IsOwnProfile  bool // ✅ Added field to check if logged-in user is viewing their own profile
+	Npub          string
 }
 
+// fileExists checks if a file exists in the static directory
+func fileExists(assetType, filename string) bool {
+	path := filepath.Join("web/static/img", assetType, filename) // Adjusted path
+	_, err := os.Stat(path)
+	return err == nil
+}
 
 // Define the base directories for views and templates
 const (
@@ -70,6 +78,7 @@ func RenderTemplate(w http.ResponseWriter, data PageData, view string, useLoginL
 	tmpl, err := template.New("").Funcs(template.FuncMap{
 		"formatTimestamp":   formatTimestamp,
 		"splitString":       splitString,
+		"fileExists":      fileExists, // ✅ Added fileExists function
 	}).ParseFiles(templates...)
 
 	if err != nil {

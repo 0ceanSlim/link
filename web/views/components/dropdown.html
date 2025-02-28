@@ -12,6 +12,15 @@
       class="absolute right-0 z-20 hidden w-48 mt-2 text-sm rounded-md shadow-xl bg-bgSecondary text-textPrimary"
     >
       <a
+        href="/"
+        class="block px-4 py-2 hover:text-textInverted hover:bg-bgInverted hover:rounded-md"
+        hx-trigger="click"
+        hx-get="/"
+        hx-swap="outerHTML"
+        hx-target="body"
+        >Profile</a
+      >
+      <a
         href="settings"
         class="block px-4 py-2 hover:text-textInverted hover:bg-bgInverted hover:rounded-md"
         hx-trigger="click"

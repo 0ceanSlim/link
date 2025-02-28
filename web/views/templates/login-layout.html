@@ -29,10 +29,10 @@
     class="max-w-screen-lg p-4 mx-auto font-mono text-center md:p-8 text-textPrimary bg-bgPrimary custom-scrollbar"
   >
     <header class="flex flex-col items-center justify-between mb-8 md:flex-row">
-      {{template "app-name"}}
+      {{template "app-name"}} {{template "search"}}
     </header>
     <div
-      class="opacity-0 transition-opacity duration-500 ease-in-out"
+      class="transition-opacity duration-500 ease-in-out opacity-0"
       _="on load add .opacity-100 to me"
     >
       {{template "login-nip07"}}

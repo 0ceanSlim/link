@@ -1,4 +1,25 @@
 {{define "profile"}}
+<div
+  id="qrPopup"
+  class="fixed inset-0 z-50 hidden transition-opacity duration-300 ease-in-out bg-black bg-opacity-50"
+>
+  <div
+    class="absolute transform -translate-x-1/2 -translate-y-1/2 top-1/2 left-1/2"
+  >
+    <button
+      id="closeBtn"
+      class="absolute p-1 text-3xl font-bold text-white cursor-pointer -top-10 -right-10"
+    >
+      ❌
+    </button>
+    <div
+      id="qrContent"
+      class="p-6 text-center transition-transform duration-300 ease-in-out transform scale-90 bg-white rounded-lg"
+    >
+      <img id="qrImage" alt="QR Code" class="mx-auto" />
+    </div>
+  </div>
+</div>
 <div class="flex flex-col items-center mb-6">
   <img
     src="{{.Picture}}"
@@ -8,10 +29,13 @@
   <h2 class="text-2xl font-bold text-center">{{.DisplayName}}</h2>
 </div>
 
-<p class="mb-4 text-sm text-center text-textMuted">{{.PublicKey}}</p>
+<p id="publicKey" class="hidden mb-4 text-sm text-center text-textMuted">
+  {{.PublicKey}}
+</p>
+<p id="npub" class="mb-4 text-sm text-center text-textMuted">{{.Npub}}</p>
 
 <div class="w-full max-w-2xl p-6 rounded-lg bg-bgPrimary">
-  <p class="text-lg text-left">{{.About}}</p>
+  <p class="text-lg text-left break-words">{{.About}}</p>
 </div>
 
 <!-- Donation Addresses -->
@@ -19,22 +43,66 @@
   <h3 class="mb-4 text-xl font-semibold text-center">Donation Addresses</h3>
   <ul id="donation-list" class="space-y-2 text-left">
     {{if .DonationTags}} {{range .DonationTags}} {{if (ge (len .) 3)}}
-    <!-- Ensure it has at least 3 elements -->
     <li
       class="flex items-center justify-between p-3 rounded-lg shadow bg-bgSecondary"
     >
-      <div>
-        <strong class="text-lg">{{index . 1}}</strong>:
-        <span class="text-sm break-all">{{index . 2}}</span>
-        {{if (gt (len .) 3)}} ({{index . 3}}) {{end}}
+      <!-- Asset Icon -->
+      {{ $asset := index . 1 }} {{ $network := "" }} {{ if (gt (len .) 3) }} {{
+      $network = index . 3 }} {{ end }}
+
+      <div class="flex items-center w-full space-x-2">
+        {{if $.IsOwnProfile}}
+        <button
+          title="Remove this donation address"
+          onclick="removeDonationAddress('{{$asset}}', '{{index . 2}}', '{{if (gt (len .) 3)}}{{$network}}{{end}}')"
+          class="p-1 text-xs rounded-md hover:bg-red-600"
+        >
+          🗑️
+        </button>
+        {{end}}
+
+        <div class="flex items-center space-x-2">
+          <!-- Check for asset icon -->
+          {{ if fileExists "asset" (printf "%s.png" $asset) }}
+          <img
+            src="/static/img/asset/{{$asset}}.png"
+            alt="{{$asset}}"
+            class="w-6 h-6"
+          />
+          {{ else }}
+          <strong class="text-lg">{{$asset}}</strong>
+          {{ end }}
+
+          <!-- Check for network icon -->
+          {{ if ne $network "" }} {{ if fileExists "network" (printf "%s.png"
+          $network) }}
+          <img
+            src="/static/img/network/{{$network}}.png"
+            alt="{{$network}}"
+            class="w-6 h-6"
+          />
+          {{ else }} ({{$network}}) {{ end }} {{ end }}
+        </div>
+
+        <!-- Address with copy on click -->
+        <div class="flex items-center justify-between flex-1 overflow-hidden">
+          <span
+            class="w-full text-sm truncate cursor-pointer hover:text-purple-500"
+            title="Click to copy"
+            onclick="copyToClipboard('{{index . 2}}')"
+            >{{index . 2}}</span
+          >
+
+          <!-- Show QR code button -->
+          <button
+            onclick="showQRCode('{{index . 2}}')"
+            class="p-1 ml-auto rounded bg-bgSecondary hover:bg-green-600"
+            title="show QR code"
+          >
+            🤳
+          </button>
+        </div>
       </div>
-      {{if $.IsOwnProfile}}
-      <button
-        onclick="removeDonationAddress('{{index . 1}}', '{{index . 2}}', '{{if (gt (len .) 3)}}{{index . 3}}{{end}}')"
-      >
-        Remove
-      </button>
-      {{end}}
     </li>
     {{end}} {{end}} {{else}}
     <p class="text-sm text-center text-textMuted">
@@ -59,21 +127,23 @@
           type="text"
           name="ticker_0"
           placeholder="Asset Ticker (e.g., BTC)"
-          class="p-2 border rounded border-bgInverted focus:ring focus:ring-accent"
+          class="w-full p-2 border rounded border-bgInverted focus:ring focus:ring-accent"
           required
+          title="BTC, LBTC, USDT, ETH, XMR, or enter your own"
         />
         <input
           type="text"
           name="network_0"
-          placeholder="Network (e.g., Bitcoin)"
-          class="p-2 border rounded border-bgInverted focus:ring focus:ring-accent"
+          placeholder="Network (e.g., bitcoin)"
+          class="w-full p-2 border rounded border-bgInverted focus:ring focus:ring-accent"
           required
+          title="bitcoin, liquid, lightning, monero, ethereum, or enter your own"
         />
         <input
           type="text"
           name="address_0"
           placeholder="Receiving Address"
-          class="p-2 border rounded border-bgInverted focus:ring focus:ring-accent"
+          class="w-full p-2 border rounded border-bgInverted focus:ring focus:ring-accent"
           required
         />
       </div>
@@ -101,5 +171,49 @@
 <script src="/static/js/removeDonationAddress.js"></script>
 <script src="/static/js/donationAddressForm.js"></script>
 <script src="/static/js/fetchUpdatedProfile.js"></script>
+<script>
+  function copyToClipboard(text) {
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        alert("Address copied to clipboard!");
+      })
+      .catch((err) => {
+        console.error("Failed to copy: ", err);
+      });
+  }
+
+  function showQRCode(text) {
+    const qrPopup = document.getElementById("qrPopup");
+    const qrImage = document.getElementById("qrImage");
+    const qrContent = document.getElementById("qrContent");
+
+    qrImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(
+      text
+    )}`;
+
+    qrPopup.classList.remove("hidden");
+    qrPopup.classList.add("opacity-0");
+
+    setTimeout(() => {
+      qrPopup.classList.remove("opacity-0");
+      qrContent.classList.remove("scale-90");
+      qrContent.classList.add("scale-100");
+    }, 10);
+  }
+
+  document.getElementById("closeBtn").addEventListener("click", () => {
+    const qrPopup = document.getElementById("qrPopup");
+    const qrContent = document.getElementById("qrContent");
+
+    qrPopup.classList.add("opacity-0");
+    qrContent.classList.remove("scale-100");
+    qrContent.classList.add("scale-90");
+
+    setTimeout(() => {
+      qrPopup.classList.add("hidden");
+    }, 300);
+  });
+</script>
 
 {{end}}

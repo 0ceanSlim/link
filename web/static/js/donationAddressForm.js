@@ -7,8 +7,8 @@ document
     let newDonationTags = [];
 
     for (let i = 0; formData.has(`ticker_${i}`); i++) {
-      const ticker = formData.get(`ticker_${i}`).trim();
-      const network = formData.get(`network_${i}`).trim();
+      const ticker = formData.get(`ticker_${i}`).trim().toUpperCase(); // Convert to uppercase
+      const network = formData.get(`network_${i}`).trim().toLowerCase(); // Convert to lowercase
       const address = formData.get(`address_${i}`).trim();
 
       if (ticker && address) {
@@ -85,7 +85,6 @@ document
       alert(`Error: ${error.message}`);
     }
   });
-
 
 let count = 1;
 

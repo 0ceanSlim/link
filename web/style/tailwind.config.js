@@ -11,6 +11,7 @@ module.exports = {
         textSecondary: "var(--color-textSecondary)",
         textMuted: "var(--color-textMuted)",
         textInverted: "var(--color-textInverted)",
+        textHighlighted: "var(--color-textHighlighted)",
       },
       keyframes: {
         spin: {
