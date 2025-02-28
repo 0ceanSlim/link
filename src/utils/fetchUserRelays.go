@@ -26,77 +26,66 @@ func (r RelayList) ToStringSlice() []string {
 }
 
 func FetchUserRelays(publicKey string, relays []string) (*RelayList, error) {
+	var relayList RelayList
+
 	for _, url := range relays {
-		log.Printf("Connecting to WebSocket: %s\n", url)
+		log.Printf("🔍 Connecting to relay: %s\n", url)
+
 		conn, _, err := websocket.DefaultDialer.Dial(url, nil)
 		if err != nil {
-			log.Printf("Failed to connect to WebSocket: %v\n", err)
+			log.Printf("❌ Failed to connect to WebSocket: %v\n", err)
 			continue
 		}
-		defer conn.Close()
+
+		subscriptionID := "sub-relay"
 
 		filter := types.SubscriptionFilter{
 			Authors: []string{publicKey},
 			Kinds:   []int{10002}, // Kind 10002 corresponds to relay list (NIP-65)
 		}
 
-		subRequest := []interface{}{
-			"REQ",
-			"sub1",
-			filter,
-		}
-
+		subRequest := []interface{}{"REQ", subscriptionID, filter}
 		requestJSON, err := json.Marshal(subRequest)
 		if err != nil {
-			log.Printf("Failed to marshal subscription request: %v\n", err)
+			log.Printf("❌ Failed to marshal subscription request: %v\n", err)
+			conn.Close()
 			return nil, err
 		}
 
-		log.Printf("Sending subscription request: %s\n", requestJSON)
-
+		log.Printf("📡 Sending subscription request to %s\n", url)
 		if err := conn.WriteMessage(websocket.TextMessage, requestJSON); err != nil {
-			log.Printf("Failed to send subscription request: %v\n", err)
+			log.Printf("❌ Failed to send subscription request: %v\n", err)
+			conn.Close()
 			return nil, err
 		}
 
-		// WebSocket message or timeout handling
-		msgChan := make(chan []byte)
-		errChan := make(chan error)
+		conn.SetReadDeadline(time.Now().Add(WebSocketTimeout))
 
-		go func() {
+		for {
 			_, message, err := conn.ReadMessage()
 			if err != nil {
-				errChan <- err
-			} else {
-				msgChan <- message
+				log.Printf("⚠️ Error reading from relay %s: %v\n", url, err)
+				conn.Close()
+				return nil, err
 			}
-		}()
 
-		select {
-		case message := <-msgChan:
-			log.Printf("Received WebSocket message: %s\n", message)
 			var response []interface{}
 			if err := json.Unmarshal(message, &response); err != nil {
-				log.Printf("Failed to unmarshal response: %v\n", err)
-				continue
+				log.Printf("❌ Failed to parse response from %s: %v\n", url, err)
+				conn.Close()
+				return nil, err
 			}
 
-			if response[0] == "EVENT" {
-				eventData, err := json.Marshal(response[2])
-				if err != nil {
-					log.Printf("Failed to marshal event data: %v\n", err)
-					continue
-				}
-
+			switch response[0] {
+			case "EVENT":
 				var event types.NostrEvent
+				eventData, _ := json.Marshal(response[2])
 				if err := json.Unmarshal(eventData, &event); err != nil {
-					log.Printf("Failed to parse event data: %v\n", err)
+					log.Printf("❌ Failed to parse event JSON from %s: %v\n", url, err)
 					continue
 				}
 
-				log.Printf("Received Nostr event: %+v\n", event)
-
-				relayList := &RelayList{}
+				log.Printf("📜 Received relay list event from %s: %+v\n", url, event)
 
 				for _, tag := range event.Tags {
 					if len(tag) > 1 && tag[0] == "r" {
@@ -113,15 +102,59 @@ func FetchUserRelays(publicKey string, relays []string) (*RelayList, error) {
 						}
 					}
 				}
-				return relayList, nil
+
+			case "EOSE":
+				log.Printf("✅ Received EOSE from %s. Closing subscription...\n", url)
+
+				// Send CLOSE message
+				closeRequest := []interface{}{"CLOSE", subscriptionID}
+				closeJSON, _ := json.Marshal(closeRequest)
+
+				if err := conn.WriteMessage(websocket.TextMessage, closeJSON); err != nil {
+					log.Printf("❌ Failed to send CLOSE message to %s: %v\n", url, err)
+				}
+
+				// Wait for "CLOSED" response with timeout
+				closedChan := make(chan struct{})
+				go func() {
+					for {
+						_, message, err := conn.ReadMessage()
+						if err != nil {
+							break
+						}
+
+						var resp []interface{}
+						if err := json.Unmarshal(message, &resp); err != nil {
+							break
+						}
+
+						if len(resp) > 1 && resp[0] == "CLOSED" && resp[1] == subscriptionID {
+							log.Printf("🔌 Subscription closed on relay %s\n", url)
+							closedChan <- struct{}{}
+							return
+						}
+					}
+				}()
+
+				select {
+				case <-closedChan:
+					// Got a "CLOSED" response, safe to disconnect
+					conn.Close()
+				case <-time.After(1 * time.Second):
+					// No "CLOSED" response, force disconnect
+					log.Printf("⚠️ No CLOSED response from %s, disconnecting manually.\n", url)
+					conn.Close()
+				}
+
+				return &relayList, nil
 			}
-		case err := <-errChan:
-			log.Printf("Error reading WebSocket message: %v\n", err)
-			continue
-		case <-time.After(WebSocketTimeout):
-			log.Printf("WebSocket response timeout from %s\n", url)
-			continue
 		}
 	}
-	return nil, nil
+
+	if len(relayList.Read) == 0 && len(relayList.Write) == 0 && len(relayList.Both) == 0 {
+		return nil, nil
+	}
+
+	return &relayList, nil
 }
+
