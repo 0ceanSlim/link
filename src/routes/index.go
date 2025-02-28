@@ -72,6 +72,12 @@ func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
+			if err := json.Unmarshal([]byte(rawEvent.Content), &metadata); err != nil {
+				log.Printf("❌ Failed to parse user metadata from cached event: %v", err)
+				http.Error(w, "Failed to parse user metadata", http.StatusInternalServerError)
+				return
+			}
+
 			if err := json.Unmarshal([]byte(cachedData.Relays), &relays); err != nil {
 				log.Printf("❌ Failed to parse cached relays JSON: %v", err)
 				http.Error(w, "Failed to parse relays", http.StatusInternalServerError)
@@ -103,6 +109,12 @@ func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
+			if err := json.Unmarshal([]byte(userEvent.Content), &metadata); err != nil {
+				log.Printf("❌ Failed to parse user metadata JSON: %v", err)
+				http.Error(w, "Failed to parse user metadata", http.StatusInternalServerError)
+				return
+			}
+
 			donationTags = extractDonationTags(userEvent.Tags)
 		}
 
@@ -127,6 +139,7 @@ func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 	// If the route does not match known paths, return 404
 	http.NotFound(w, r)
 }
+
 
 // extractDonationTags filters donation tags from the event tags
 func extractDonationTags(tags [][]string) [][]string {
