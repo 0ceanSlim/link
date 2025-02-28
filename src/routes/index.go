@@ -2,6 +2,7 @@ package routes
 
 import (
 	"encoding/json"
+	"link/src/cache"
 	"link/src/handlers"
 	"link/src/types"
 	"link/src/utils"
@@ -33,12 +34,12 @@ func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		log.Printf("🔄 Redirecting logged-in user to /p/%s", npub)
+		log.Printf("🔄 Redirecting logged-in user to /%s", npub)
 		http.Redirect(w, r, "/"+npub, http.StatusSeeOther)
 		return
 	}
 
-	// If the path starts with "/p/", treat it as a profile view
+	// If the path starts with "/", treat it as a profile view
 	if strings.HasPrefix(path, "/") {
 		npub := strings.TrimPrefix(path, "/")
 
@@ -52,32 +53,57 @@ func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 		// Determine if the logged-in user is viewing their own profile
 		isOwnProfile := userPublicKey == pubKey
 
-		// Fetch relays for the public key
-		relays, err := utils.FetchUserRelays(pubKey, []string{
-			"wss://purplepag.es", "wss://relay.damus.io", "wss://nos.lol",
-			"wss://relay.primal.net", "wss://relay.nostr.band", "wss://offchain.pub",
-		})
-		if err != nil {
-			log.Printf("Failed to fetch user relays: %v", err)
-		}
-
-		// Get user metadata (raw NostrEvent)
-		userEvent, err := utils.FetchUserMetadata(pubKey, relays.ToStringSlice())
-		if err != nil {
-			http.Error(w, "Failed to fetch user metadata", http.StatusInternalServerError)
-			return
-		}
-		if userEvent == nil {
-			http.Error(w, "User metadata not found", http.StatusNotFound)
-			return
-		}
-
-		// Parse `Content` JSON into `UserMetadata`
 		var metadata types.UserMetadata
-		if err := json.Unmarshal([]byte(userEvent.Content), &metadata); err != nil {
-			log.Printf("❌ Failed to parse user metadata JSON: %v", err)
-			http.Error(w, "Failed to parse user metadata", http.StatusInternalServerError)
-			return
+		var donationTags [][]string
+		var relays utils.RelayList
+
+		if isOwnProfile {
+			// Fetch data from cache for own profile
+			cachedData, found := cache.GetUserData(pubKey)
+			if !found {
+				http.Error(w, "No cached data found", http.StatusNotFound)
+				return
+			}
+
+			var rawEvent types.NostrEvent
+			if err := json.Unmarshal([]byte(cachedData.Metadata), &rawEvent); err != nil {
+				log.Printf("❌ Failed to parse cached raw event JSON: %v", err)
+				http.Error(w, "Failed to parse raw event", http.StatusInternalServerError)
+				return
+			}
+
+			if err := json.Unmarshal([]byte(cachedData.Relays), &relays); err != nil {
+				log.Printf("❌ Failed to parse cached relays JSON: %v", err)
+				http.Error(w, "Failed to parse relays", http.StatusInternalServerError)
+				return
+			}
+
+			donationTags = extractDonationTags(rawEvent.Tags)
+		} else {
+			// Fetch relays for other users
+			relaysPtr, err := utils.FetchUserRelays(pubKey, []string{
+				"wss://purplepag.es", "wss://relay.damus.io", "wss://nos.lol",
+				"wss://relay.primal.net", "wss://relay.nostr.band", "wss://offchain.pub",
+			})
+			if err != nil {
+				log.Printf("Failed to fetch user relays: %v", err)
+			}
+			if relaysPtr != nil {
+				relays = *relaysPtr
+			}
+
+			// Get user metadata (raw NostrEvent)
+			userEvent, err := utils.FetchUserMetadata(pubKey, relays.ToStringSlice())
+			if err != nil {
+				http.Error(w, "Failed to fetch user metadata", http.StatusInternalServerError)
+				return
+			}
+			if userEvent == nil {
+				http.Error(w, "User metadata not found", http.StatusNotFound)
+				return
+			}
+
+			donationTags = extractDonationTags(userEvent.Tags)
 		}
 
 		// Prepare page data
@@ -88,8 +114,8 @@ func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 			PublicKey:     pubKey,
 			UserPublicKey: userPublicKey,
 			About:         metadata.About,
-			Relays:        *relays,
-			DonationTags:  userEvent.Tags, // ✅ Keep all tags, not just donation tags
+			Relays:        relays,
+			DonationTags:  donationTags,
 			IsOwnProfile:  isOwnProfile,
 		}
 
@@ -100,4 +126,15 @@ func ProfileHandler(w http.ResponseWriter, r *http.Request) {
 
 	// If the route does not match known paths, return 404
 	http.NotFound(w, r)
+}
+
+// extractDonationTags filters donation tags from the event tags
+func extractDonationTags(tags [][]string) [][]string {
+	var donationTags [][]string
+	for _, tag := range tags {
+		if len(tag) > 0 && tag[0] == "w" {
+			donationTags = append(donationTags, tag)
+		}
+	}
+	return donationTags
 }
