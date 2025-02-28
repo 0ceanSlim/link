@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"link/src/cache"
 	"link/src/utils"
 	"log"
 	"net/http"
@@ -14,7 +15,7 @@ func SaveDonationAddresses(w http.ResponseWriter, r *http.Request) {
 	session, _ := User.Get(r, "session-name")
 
 	// Extract public key from session
-	publicKey, ok := session.Values["publicKey"].(string)
+	publicKey, ok := session.Values["UserPublicKey"].(string)
 	if !ok || publicKey == "" {
 		http.Error(w, "User not authenticated", http.StatusUnauthorized)
 		return
@@ -28,9 +29,21 @@ func SaveDonationAddresses(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch relays from session
-	relays, ok := session.Values["relays"].(utils.RelayList)
-	if !ok || len(relays.Both) == 0 {
+	// Fetch relays from cache instead of session
+	cachedData, found := cache.GetUserData(publicKey)
+	if !found {
+		http.Error(w, "No cached data found", http.StatusInternalServerError)
+		return
+	}
+
+	var relays utils.RelayList
+	if err := json.Unmarshal([]byte(cachedData.Relays), &relays); err != nil {
+		log.Printf("❌ Error decoding cached relays: %v", err)
+		http.Error(w, "Failed to process relays", http.StatusInternalServerError)
+		return
+	}
+
+	if len(relays.Both) == 0 {
 		http.Error(w, "No relays found", http.StatusInternalServerError)
 		return
 	}
@@ -58,13 +71,14 @@ func SaveDonationAddresses(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// ✅ Update session with new donation addresses
-	session.Values["donationTags"] = updatedMetadata.Tags
-	if err := session.Save(r, w); err != nil {
-		log.Printf("❌ Error saving session: %v", err)
-		http.Error(w, "Failed to save session", http.StatusInternalServerError)
+	// ✅ Update cache with new donation addresses
+	updatedMetadataJSON, err := json.Marshal(updatedMetadata)
+	if err != nil {
+		log.Printf("❌ Error serializing updated metadata: %v", err)
+		http.Error(w, "Failed to update cache", http.StatusInternalServerError)
 		return
 	}
+	cache.SetUserData(publicKey, string(updatedMetadataJSON), cachedData.Relays)
 
 	// ✅ Return updated donation list to frontend
 	w.Header().Set("Content-Type", "application/json")

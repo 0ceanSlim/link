@@ -24,8 +24,8 @@ func main() {
 	mux.HandleFunc("/logout", handlers.LogoutHandler) // Logout process
 	mux.HandleFunc("/encode-key", handlers.EncodeKeyHandler)
 	mux.HandleFunc("/get-session", handlers.GetSessionHandler)
-
-
+	mux.HandleFunc("/get-cache", handlers.GetCacheHandler)
+	mux.HandleFunc("/fetch_current_kind0", handlers.FetchCurrentKind0FromCache)
 
 	// Initialize Routes
 	//mux.HandleFunc("/", routes.Index)

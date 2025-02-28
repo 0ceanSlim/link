@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 
+	"link/src/cache"
 	"link/src/types"
 	"link/src/utils"
 
@@ -15,18 +16,15 @@ import (
 var User = sessions.NewCookieStore([]byte("your-secret-key"))
 
 func init() {
-	// Register types for session storage
 	gob.Register(utils.RelayList{})
 	gob.Register([][]string{})
-	gob.Register(types.NostrEvent{})      // ✅ Fix: Register NostrEvent
-	gob.Register([]types.NostrEvent{})    // ✅ Fix: Register slice of NostrEvent
+	gob.Register(types.NostrEvent{})
+	gob.Register([]types.NostrEvent{})
 }
 
-// InitUser initializes a user session after login
 func InitUser(w http.ResponseWriter, r *http.Request) {
 	log.Println("🔑 InitUser called")
 
-	// Parse form data
 	if err := r.ParseForm(); err != nil {
 		log.Printf("❌ Failed to parse form: %v", err)
 		http.Error(w, "Invalid request", http.StatusBadRequest)
@@ -41,7 +39,6 @@ func InitUser(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("✅ Received publicKey: %s", publicKey)
 
-	// Fetch user relay list
 	initialRelays := []string{
 		"wss://purplepag.es", "wss://relay.damus.io", "wss://nos.lol",
 		"wss://relay.primal.net", "wss://relay.nostr.band", "wss://offchain.pub",
@@ -54,39 +51,42 @@ func InitUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Combine relays
 	allRelays := append(userRelays.Read, userRelays.Write...)
 	allRelays = append(allRelays, userRelays.Both...)
 	log.Printf("✅ Fetched user relays: %+v", userRelays)
 
-	// Fetch raw metadata event
 	userMetadataEvent, err := utils.FetchUserMetadata(publicKey, allRelays)
-	if err != nil {
+	if err != nil || userMetadataEvent == nil {
 		log.Printf("❌ Failed to fetch user metadata: %v", err)
 		http.Error(w, "Failed to fetch user metadata", http.StatusInternalServerError)
 		return
 	}
-	if userMetadataEvent == nil {
-		log.Println("⚠️ No metadata found for user")
-		http.Error(w, "No metadata found for user", http.StatusNotFound)
+
+	relaysJSON, err := json.Marshal(userRelays)
+	if err != nil {
+		log.Printf("❌ Failed to serialize user relays: %v", err)
+		http.Error(w, "Failed to process user relays", http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("✅ Fetched raw user metadata event: %+v", userMetadataEvent)
-
-	// Parse metadata content into `UserMetadata`
-	var userMetadata types.UserMetadata
-	if err := json.Unmarshal([]byte(userMetadataEvent.Content), &userMetadata); err != nil {
-		log.Printf("❌ Failed to parse metadata JSON: %v", err)
-		http.Error(w, "Failed to parse user metadata", http.StatusInternalServerError)
+	eventJSON, err := json.Marshal(userMetadataEvent)
+	if err != nil {
+		log.Printf("❌ Failed to serialize user metadata event: %v", err)
+		http.Error(w, "Failed to process user metadata", http.StatusInternalServerError)
 		return
 	}
 
-	// ✅ Store all tags instead of just donation tags
-	allTags := userMetadataEvent.Tags
-	log.Printf("✅ Extracted All Tags: %+v", allTags)
+	cache.SetUserData(publicKey, string(eventJSON), string(relaysJSON))
+	log.Println("✅ User data cached successfully")
 
-	// Convert hex public key to npub
+	session, _ := User.Get(r, "session-name")
+	session.Values["UserPublicKey"] = publicKey
+	if err := session.Save(r, w); err != nil {
+		log.Printf("❌ Failed to save session: %v", err)
+		http.Error(w, "Failed to save session", http.StatusInternalServerError)
+		return
+	}
+
 	npub, err := utils.EncodeNpub(publicKey)
 	if err != nil {
 		log.Printf("❌ Failed to encode publicKey to npub: %v", err)
@@ -94,27 +94,6 @@ func InitUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Save session
-	session, _ := User.Get(r, "session-name")
-	session.Values["UserPublicKey"] = publicKey
-	session.Values["displayName"] = userMetadata.DisplayName
-	session.Values["picture"] = userMetadata.Picture
-	session.Values["about"] = userMetadata.About
-	session.Values["relays"] = userRelays
-	session.Values["tags"] = userMetadataEvent.Tags // ✅ Store all tags
-
-	// ✅ Store only raw metadata *content* (not the full NostrEvent)
-	session.Values["rawUserMetadataContent"] = userMetadataEvent.Content
-
-	if err := session.Save(r, w); err != nil {
-		log.Printf("❌ Failed to save session: %v", err)
-		http.Error(w, "Failed to save session", http.StatusInternalServerError)
-		return
-	}
-
-	log.Println("✅ Session saved successfully")
-
-	// Redirect to /p/<npub>
 	http.Redirect(w, r, "/"+npub, http.StatusSeeOther)
 	log.Printf("🔄 Redirecting to /%s", npub)
 }

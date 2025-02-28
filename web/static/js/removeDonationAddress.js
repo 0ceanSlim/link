@@ -6,7 +6,7 @@ async function removeDonationAddress(asset, address, network = "") {
 
   try {
     // ✅ Fetch latest profile event (from relay)
-    const profileEvent = await fetchUpdatedProfile();
+    const profileEvent = await fetchCurrentKind0FromCache();
     if (!profileEvent) {
       alert("Failed to fetch profile event.");
       return;

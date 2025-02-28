@@ -13,9 +13,9 @@ document
 
       if (ticker && address) {
         if (network) {
-          newDonationTags.push(["w", ticker, address, network]); // ✅ New format
+          newDonationTags.push(["w", ticker, address, network]);
         } else {
-          newDonationTags.push(["w", ticker, address]); // ✅ Without network
+          newDonationTags.push(["w", ticker, address]);
         }
       }
     }
@@ -31,8 +31,7 @@ document
     }
 
     try {
-      const profileEvent = await fetchUpdatedProfile(); // This should fetch the current user profile stored in session
-
+      const profileEvent = await fetchCurrentKind0FromCache();
       if (!profileEvent || !profileEvent.tags) {
         alert("Failed to fetch existing donation addresses.");
         return;
@@ -53,8 +52,8 @@ document
         }
       });
 
-      updatedTags = updatedTags.filter((tag) => tag[0] !== "w"); // ✅ Remove old "w" tags
-      updatedTags.push(...existingDonationTags); // ✅ Append all "w" tags back
+      updatedTags = updatedTags.filter((tag) => tag[0] !== "w"); // Remove old "w" tags
+      updatedTags.push(...existingDonationTags); // Append updated tags
 
       const updatedEvent = {
         kind: 0,
@@ -76,8 +75,6 @@ document
       }
 
       alert("Donation address added successfully!");
-
-      // **Fetch updated profile immediately before refreshing**
       await fetchUpdatedProfile();
 
       setTimeout(() => {
@@ -88,6 +85,7 @@ document
       alert(`Error: ${error.message}`);
     }
   });
+
 
 let count = 1;
 
@@ -108,4 +106,18 @@ function addField() {
 
 function removeField(button) {
   button.parentElement.remove();
+}
+
+async function fetchCurrentKind0FromCache() {
+  try {
+    const response = await fetch("/fetch_current_kind0");
+    if (!response.ok) {
+      throw new Error(`Failed to fetch Kind 0 data: ${await response.text()}`);
+    }
+    const data = await response.json();
+    return JSON.parse(data.rawUserMetadataContent); // Convert string back to JSON
+  } catch (error) {
+    console.error("❌ Error fetching Kind 0 event from cache:", error);
+    return null;
+  }
 }

@@ -13,11 +13,6 @@ func GetSessionHandler(w http.ResponseWriter, r *http.Request) {
 	// Convert session values into a map
 	sessionData := map[string]interface{}{
 		"UserPublicKey": session.Values["UserPublicKey"],
-		"displayName":   session.Values["displayName"],
-		"picture":       session.Values["picture"],
-		"about":         session.Values["about"],
-		"relays":        session.Values["relays"],
-		"tags":  session.Values["tags"],
 	}
 
 	// Log session data for debugging
