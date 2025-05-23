@@ -27,6 +27,7 @@ func (r RelayList) ToStringSlice() []string {
 
 func FetchUserRelays(publicKey string, relays []string) (*RelayList, error) {
 	var relayList RelayList
+	found := false
 
 	for _, url := range relays {
 		log.Printf("🔍 Connecting to relay: %s\n", url)
@@ -34,7 +35,7 @@ func FetchUserRelays(publicKey string, relays []string) (*RelayList, error) {
 		conn, _, err := websocket.DefaultDialer.Dial(url, nil)
 		if err != nil {
 			log.Printf("❌ Failed to connect to WebSocket: %v\n", err)
-			continue
+			continue // Try next relay
 		}
 
 		subscriptionID := "sub-relay"
@@ -49,31 +50,30 @@ func FetchUserRelays(publicKey string, relays []string) (*RelayList, error) {
 		if err != nil {
 			log.Printf("❌ Failed to marshal subscription request: %v\n", err)
 			conn.Close()
-			return nil, err
+			continue // Try next relay
 		}
 
 		log.Printf("📡 Sending subscription request to %s\n", url)
 		if err := conn.WriteMessage(websocket.TextMessage, requestJSON); err != nil {
 			log.Printf("❌ Failed to send subscription request: %v\n", err)
 			conn.Close()
-			return nil, err
+			continue // Try next relay
 		}
 
 		conn.SetReadDeadline(time.Now().Add(WebSocketTimeout))
 
+		// Process messages from this relay
 		for {
 			_, message, err := conn.ReadMessage()
 			if err != nil {
 				log.Printf("⚠️ Error reading from relay %s: %v\n", url, err)
-				conn.Close()
-				return nil, err
+				break // Break inner loop to try next relay
 			}
 
 			var response []interface{}
 			if err := json.Unmarshal(message, &response); err != nil {
 				log.Printf("❌ Failed to parse response from %s: %v\n", url, err)
-				conn.Close()
-				return nil, err
+				break // Break inner loop to try next relay
 			}
 
 			switch response[0] {
@@ -87,6 +87,7 @@ func FetchUserRelays(publicKey string, relays []string) (*RelayList, error) {
 
 				log.Printf("📜 Received relay list event from %s: %+v\n", url, event)
 
+				// Process the relay list tags
 				for _, tag := range event.Tags {
 					if len(tag) > 1 && tag[0] == "r" {
 						relayURL := tag[1]
@@ -102,9 +103,10 @@ func FetchUserRelays(publicKey string, relays []string) (*RelayList, error) {
 						}
 					}
 				}
+				found = true // Mark that we found data
 
 			case "EOSE":
-				log.Printf("✅ Received EOSE from %s. Closing subscription...\n", url)
+				log.Printf("✅ Received EOSE from %s\n", url)
 
 				// Send CLOSE message
 				closeRequest := []interface{}{"CLOSE", subscriptionID}
@@ -138,23 +140,33 @@ func FetchUserRelays(publicKey string, relays []string) (*RelayList, error) {
 
 				select {
 				case <-closedChan:
-					// Got a "CLOSED" response, safe to disconnect
 					conn.Close()
 				case <-time.After(1 * time.Second):
-					// No "CLOSED" response, force disconnect
 					log.Printf("⚠️ No CLOSED response from %s, disconnecting manually.\n", url)
 					conn.Close()
 				}
 
-				return &relayList, nil
+				// If we found relay data, return it. Otherwise, continue to next relay
+				if found {
+					log.Printf("✅ Found relay list data from %s, returning\n", url)
+					return &relayList, nil
+				} else {
+					log.Printf("⚠️ No relay list found on %s, trying next relay\n", url)
+					goto nextRelay // Break out of inner loop to try next relay
+				}
 			}
 		}
+
+		nextRelay:
+		conn.Close()
 	}
 
-	if len(relayList.Read) == 0 && len(relayList.Write) == 0 && len(relayList.Both) == 0 {
-		return nil, nil
+	// If we tried all relays and found some data, return it
+	if found {
+		return &relayList, nil
 	}
 
-	return &relayList, nil
+	// If no relay list was found on any relay, return nil
+	log.Println("❌ No relay list found on any relay")
+	return nil, nil
 }
-
